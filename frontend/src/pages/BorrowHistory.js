@@ -1,93 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiGet } from '../services/api';
 
 /**
  * BorrowHistory Page
  * 
+ * UPDATES (Phase 2 Integration):
+ * ✅ Removed mockBorrowHistory
+ * ✅ Fetch user requests from: GET /api/requests/user/:userId
+ * ✅ Filter by status and search
+ * ✅ Loading and error states
+ * ✅ View request details
+ * 
  * This page displays:
- * - All borrowing requests made by the user
+ * - All borrowing requests made by the logged-in user
  * - Status of each request (pending, approved, rejected, returned)
  * - Request details and history
  * - Filter and search functionality
- * 
- * Props:
- * - user: Current logged-in user object
- * 
- * Future Integration with Backend:
- * - Get requests: GET /api/requests/user/:userId
- * - Cancel request: DELETE /api/requests/:requestId
- * - Return equipment: POST /api/requests/:requestId/return
  */
 
 const BorrowHistory = ({ user }) => {
-  // Mock borrow history data
-  const mockBorrowHistory = [
-    {
-      id: 1,
-      equipmentName: 'Basketball Set',
-      equipmentId: 1,
-      category: 'Sports',
-      borrowDate: '2025-11-01',
-      returnDate: '2025-11-05',
-      requestedDate: '2025-10-31',
-      status: 'approved',
-      approvedBy: 'Admin User',
-      notes: 'Return in good condition',
-    },
-    {
-      id: 2,
-      equipmentName: 'Microscope',
-      equipmentId: 2,
-      category: 'Lab',
-      borrowDate: '2025-10-28',
-      returnDate: '2025-10-30',
-      requestedDate: '2025-10-27',
-      status: 'returned',
-      approvedBy: 'Admin User',
-      notes: 'Used for biology lab',
-    },
-    {
-      id: 3,
-      equipmentName: 'Digital Camera',
-      equipmentId: 3,
-      category: 'Camera',
-      borrowDate: null,
-      returnDate: null,
-      requestedDate: '2025-11-02',
-      status: 'pending',
-      approvedBy: null,
-      notes: 'Awaiting approval',
-    },
-    {
-      id: 4,
-      equipmentName: 'Guitar',
-      equipmentId: 4,
-      category: 'Musical',
-      borrowDate: null,
-      returnDate: null,
-      requestedDate: '2025-11-01',
-      status: 'rejected',
-      approvedBy: 'Admin User',
-      notes: 'Equipment currently unavailable',
-    },
-    {
-      id: 5,
-      equipmentName: 'Laptop',
-      equipmentId: 5,
-      category: 'Computing',
-      borrowDate: '2025-10-20',
-      returnDate: '2025-10-25',
-      requestedDate: '2025-10-19',
-      status: 'returned',
-      approvedBy: 'Admin User',
-      notes: 'Used for project work',
-    },
-  ];
-
   // State management
-  const [borrowHistory, setBorrowHistory] = useState(mockBorrowHistory);
+  const [borrowHistory, setBorrowHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewDetails, setViewDetails] = useState(null);
+
+  /**
+   * Fetch user's requests on component mount
+   */
+  useEffect(() => {
+    fetchUserRequests();
+  }, []);
+
+  /**
+   * Fetch user's borrow requests from backend
+   */
+  const fetchUserRequests = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Get user ID
+      const userId = user._id || user.id;
+
+      if (!userId) {
+        setError('User ID not found');
+        setLoading(false);
+        return;
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('limit', '100'); // Get all user requests
+
+      // Call: GET /api/requests/user/:userId
+      const response = await apiGet(`/api/requests/user/${userId}?${params.toString()}`);
+
+      if (response.success) {
+        setBorrowHistory(response.data.requests);
+        console.log('User requests loaded:', response.data.requests);
+      } else {
+        setError(response.message || 'Failed to load borrow history');
+      }
+    } catch (err) {
+      console.error('Error loading borrow history:', err);
+      setError(err.message || 'Error loading borrow history from server');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /**
    * Filter history based on search and status
@@ -136,13 +119,35 @@ const BorrowHistory = ({ user }) => {
     <div className="container-fluid py-4">
       {/* Header Section */}
       <div className="row mb-4">
-        <div className="col-12">
+        <div className="col-md-8">
           <h1 className="h3 fw-bold text-dark">
             <i className="fa fa-history me-2 text-primary"></i>Borrow History
           </h1>
           <p className="text-muted">View all your borrowing requests and history</p>
         </div>
+        <div className="col-md-4 text-end">
+          <button
+            className="btn btn-outline-secondary"
+            onClick={fetchUserRequests}
+            disabled={loading}
+          >
+            <i className="fa fa-refresh me-1"></i>Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          <i className="fa fa-exclamation-circle me-2"></i>
+          <strong>Error!</strong> {error}
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError('')}
+          ></button>
+        </div>
+      )}
 
       {/* Status Summary Cards */}
       <div className="row mb-4 g-3">
@@ -227,6 +232,7 @@ const BorrowHistory = ({ user }) => {
             placeholder="Search by equipment name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={loading}
           />
         </div>
 
@@ -238,6 +244,7 @@ const BorrowHistory = ({ user }) => {
             className="form-select"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
+            disabled={loading}
           >
             <option value="all">All Requests</option>
             <option value="pending">Pending</option>
@@ -248,18 +255,27 @@ const BorrowHistory = ({ user }) => {
         </div>
       </div>
 
-      {/* Results Counter */}
+      {/* Results Counter and Loading */}
       <div className="row mb-3">
         <div className="col-12">
-          <p className="text-muted small">
-            Showing <strong>{filteredHistory.length}</strong> of{' '}
-            <strong>{borrowHistory.length}</strong> requests
-          </p>
+          {loading ? (
+            <div className="d-flex align-items-center text-muted">
+              <div className="spinner-border spinner-border-sm me-2" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <span>Loading borrow history...</span>
+            </div>
+          ) : (
+            <p className="text-muted small">
+              Showing <strong>{filteredHistory.length}</strong> of{' '}
+              <strong>{borrowHistory.length}</strong> requests
+            </p>
+          )}
         </div>
       </div>
 
       {/* Borrow History Table */}
-      {filteredHistory.length > 0 ? (
+      {!loading && filteredHistory.length > 0 ? (
         <div className="row mb-4">
           <div className="col-12">
             <div className="table-responsive">
@@ -288,16 +304,25 @@ const BorrowHistory = ({ user }) => {
                   {filteredHistory.map((item) => {
                     const status = getStatusBadge(item.status);
                     return (
-                      <tr key={item.id}>
+                      <tr key={item._id}>
                         <td>
                           <div>
                             <p className="fw-600 text-dark mb-1">{item.equipmentName}</p>
-                            <small className="text-muted">{item.category}</small>
                           </div>
                         </td>
-                        <td className="text-muted">{item.requestedDate}</td>
-                        <td className="text-muted">{item.borrowDate || '-'}</td>
-                        <td className="text-muted">{item.returnDate || '-'}</td>
+                        <td className="text-muted">
+                          {new Date(item.requestedDate).toLocaleDateString()}
+                        </td>
+                        <td className="text-muted">
+                          {item.borrowFromDate
+                            ? new Date(item.borrowFromDate).toLocaleDateString()
+                            : '-'}
+                        </td>
+                        <td className="text-muted">
+                          {item.borrowToDate
+                            ? new Date(item.borrowToDate).toLocaleDateString()
+                            : '-'}
+                        </td>
                         <td>
                           <span className={`badge ${status.bg}`}>
                             <i className={`fa ${status.icon} me-1`}></i>
@@ -321,7 +346,7 @@ const BorrowHistory = ({ user }) => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : !loading && filteredHistory.length === 0 ? (
         <div className="text-center py-5">
           <i className="fa fa-inbox fa-3x text-muted mb-3 d-block"></i>
           <h5 className="text-muted">No requests found</h5>
@@ -329,7 +354,7 @@ const BorrowHistory = ({ user }) => {
             Try adjusting your search or filters
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Details Modal */}
       {viewDetails && (
@@ -349,10 +374,9 @@ const BorrowHistory = ({ user }) => {
               <div className="modal-body">
                 <div className="mb-3">
                   <h6 className="fw-600 text-dark mb-2">Equipment</h6>
-                  <p className="mb-1">
+                  <p className="mb-0">
                     <strong>{viewDetails.equipmentName}</strong>
                   </p>
-                  <small className="text-muted">Category: {viewDetails.category}</small>
                 </div>
 
                 <hr />
@@ -366,7 +390,7 @@ const BorrowHistory = ({ user }) => {
                     </span>
                   </div>
                   <small className="text-muted">
-                    Requested: {viewDetails.requestedDate}
+                    Requested: {new Date(viewDetails.requestedDate).toLocaleDateString()}
                   </small>
                 </div>
 
@@ -376,27 +400,35 @@ const BorrowHistory = ({ user }) => {
                   <h6 className="fw-600 text-dark mb-2">Dates</h6>
                   <div className="d-flex justify-content-between mb-1">
                     <span className="text-muted">Borrow Date:</span>
-                    <strong className="text-dark">{viewDetails.borrowDate || '-'}</strong>
+                    <strong className="text-dark">
+                      {viewDetails.borrowFromDate
+                        ? new Date(viewDetails.borrowFromDate).toLocaleDateString()
+                        : '-'}
+                    </strong>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span className="text-muted">Return Date:</span>
-                    <strong className="text-dark">{viewDetails.returnDate || '-'}</strong>
+                    <strong className="text-dark">
+                      {viewDetails.borrowToDate
+                        ? new Date(viewDetails.borrowToDate).toLocaleDateString()
+                        : '-'}
+                    </strong>
                   </div>
                 </div>
 
                 <hr />
 
-                {viewDetails.approvedBy && (
-                  <div className="mb-3">
-                    <h6 className="fw-600 text-dark mb-2">Approved By</h6>
-                    <p className="mb-0 text-muted">{viewDetails.approvedBy}</p>
-                  </div>
-                )}
-
                 {viewDetails.notes && (
                   <div className="mb-3">
                     <h6 className="fw-600 text-dark mb-2">Notes</h6>
                     <p className="mb-0 text-muted">{viewDetails.notes}</p>
+                  </div>
+                )}
+
+                {viewDetails.approvalNotes && (
+                  <div className="mb-0">
+                    <h6 className="fw-600 text-dark mb-2">Approval Notes</h6>
+                    <p className="mb-0 text-muted">{viewDetails.approvalNotes}</p>
                   </div>
                 )}
               </div>

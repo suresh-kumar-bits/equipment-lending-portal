@@ -1,28 +1,45 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { clearAuthData } from '../services/api';
 import 'font-awesome/css/font-awesome.min.css';
 
 /**
  * Navbar Component
+ * 
+ * UPDATES (Phase 2 Integration):
+ * ✅ Import clearAuthData from api service
+ * ✅ Clear token and user from localStorage on logout
+ * ✅ Proper cleanup before redirect
  * 
  * This component displays the navigation bar at the top of the application.
  * It shows different menu items based on user role (Student, Staff, Admin).
  * Users can logout from this navbar.
  * 
  * Props:
- * - user: Current logged-in user object {id, name, email, role}
+ * - user: Current logged-in user object {_id, name, email, role}
  * - onLogout: Function to call when user clicks logout
  */
 
 const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
 
-  // Handle logout functionality
+  /**
+   * Handle logout functionality
+   * ✅ Clear token and user from localStorage
+   * ✅ Call parent component's logout function
+   * ✅ Redirect to login page
+   */
   const handleLogout = () => {
-    // Call the parent component's logout function
+    // Clear all authentication data from localStorage
+    clearAuthData();
+    
+    // Call the parent component's logout function (clears React state)
     onLogout();
+    
     // Redirect to login page
     navigate('/login');
+    
+    console.log('User logged out and auth data cleared');
   };
 
   // Function to render menu items based on user role
@@ -57,11 +74,6 @@ const Navbar = ({ user, onLogout }) => {
           <li className="nav-item">
             <Link className="nav-link text-light" to="/requests">
               Requests
-            </Link>
-          </li>
-          <li className="nav-item">
-            <Link className="nav-link text-light" to="/borrow-history">
-              History
             </Link>
           </li>
         </>

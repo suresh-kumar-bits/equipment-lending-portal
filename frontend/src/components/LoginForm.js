@@ -1,22 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authLogin } from '../services/api';
 
 /**
  * LoginForm Component
  * 
- * This component displays a professional login form where users can:
- * - Enter email and password
- * - Select their role (Student, Staff, Admin)
- * - Login to the system
- * 
- * Props:
- * - onLogin: Function called when user successfully logs in
- *           Receives user object {id, name, email, role}
- * 
- * Future Integration with Backend:
- * - Replace mockData with real API call
- * - Send credentials to: POST /api/auth/login
- * - Receive JWT token and user data
+ * UPDATES (Phase 2 Integration):
+ * ✅ Removed mockUsers array
+ * ✅ Integrated real backend API call: POST /api/auth/login
+ * ✅ Sends email, password, and role to backend
+ * ✅ Receives JWT token and user data from backend
+ * ✅ Token automatically stored in localStorage via api.js
+ * ✅ Improved error messages from backend
+ * ✅ Better loading and error states
  */
 
 const LoginForm = ({ onLogin }) => {
@@ -48,59 +44,8 @@ const LoginForm = ({ onLogin }) => {
   };
 
   /**
-   * Mock Authentication Data
-   * In Phase 1: Using mock data stored locally
-   * In Phase 2: Will be replaced with real backend API call
-   * 
-   * API Documentation (for backend team):
-   * Endpoint: POST /api/auth/login
-   * Request Body:
-   * {
-   *   "email": "user@example.com",
-   *   "password": "password123",
-   *   "role": "student" | "staff" | "admin"
-   * }
-   * Response:
-   * {
-   *   "success": true,
-   *   "token": "jwt_token_here",
-   *   "user": {
-   *     "id": "user_id",
-   *     "name": "John Doe",
-   *     "email": "user@example.com",
-   *     "role": "student" | "staff" | "admin"
-   *   }
-   * }
-   */
-
-  const mockUsers = [
-    {
-      id: '1',
-      name: 'John Student',
-      email: 'student@example.com',
-      password: 'password123',
-      role: 'student',
-    },
-    {
-      id: '2',
-      name: 'Jane Staff',
-      email: 'staff@example.com',
-      password: 'password123',
-      role: 'staff',
-    },
-    {
-      id: '3',
-      name: 'Admin User',
-      email: 'admin@example.com',
-      password: 'password123',
-      role: 'admin',
-    },
-  ];
-
-  /**
    * Handle form submission (login)
-   * Validates credentials against mock data
-   * In Phase 2: Will call real backend API
+   * Calls real backend API
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -123,44 +68,34 @@ const LoginForm = ({ onLogin }) => {
         return;
       }
 
-      // Simulate API delay (500ms)
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // ============================================================
+      // CALL REAL BACKEND API
+      // ============================================================
 
-      // Mock authentication - find user in mockUsers array
-      const user = mockUsers.find(
-        (u) =>
-          u.email === formData.email &&
-          u.password === formData.password &&
-          u.role === formData.role
+      const response = await authLogin(
+        formData.email,
+        formData.password,
+        formData.role
       );
 
-      if (!user) {
-        setError('Invalid email, password, or role. Please check your credentials.');
-        setLoading(false);
-        return;
-      }
-
-      // Successful login
-      console.log('Login successful:', user);
+      // response contains: { token, user }
+      console.log('Login successful, received data:', response);
 
       // Call parent component's onLogin function
-      // Pass user data (without password)
-      onLogin({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      });
+      // Pass user data from backend
+      onLogin(response.user);
 
       // Redirect to appropriate dashboard
-      if (user.role === 'admin') {
+      if (response.user.role === 'admin') {
         navigate('/admin-dashboard');
       } else {
         navigate('/student-dashboard');
       }
+
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      // Display error message from backend or generic error
       console.error('Login error:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -215,7 +150,7 @@ const LoginForm = ({ onLogin }) => {
                       disabled={loading}
                     />
                     <small className="text-muted d-block mt-1">
-                      Try: student@example.com, staff@example.com, or admin@example.com
+                      Example: student@example.com
                     </small>
                   </div>
 
@@ -234,9 +169,6 @@ const LoginForm = ({ onLogin }) => {
                       onChange={handleInputChange}
                       disabled={loading}
                     />
-                    <small className="text-muted d-block mt-1">
-                      Try password: password123 (for all accounts)
-                    </small>
                   </div>
 
                   {/* Role Selection */}
@@ -284,23 +216,17 @@ const LoginForm = ({ onLogin }) => {
                 {/* Divider */}
                 <hr className="my-4" />
 
-                {/* Demo Credentials Info */}
-                <div className="alert alert-info alert-sm" role="alert">
+                {/* Info Box */}
+                {/* <div className="alert alert-info alert-sm" role="alert">
                   <strong>
-                    <i className="fa fa-info-circle me-2"></i>Demo Credentials
+                    <i className="fa fa-info-circle me-2"></i>Using Backend API
                   </strong>
-                  <ul className="small mb-0 mt-2">
-                    <li>
-                      <strong>Student:</strong> student@example.com / password123
-                    </li>
-                    <li>
-                      <strong>Staff:</strong> staff@example.com / password123
-                    </li>
-                    <li>
-                      <strong>Admin:</strong> admin@example.com / password123
-                    </li>
-                  </ul>
-                </div>
+                  <p className="small mb-0 mt-2">
+                    This login form is connected to the real backend API at 
+                    <br />
+                    <code>POST /api/auth/login</code>
+                  </p>
+                </div> */}
               </div>
             </div>
 

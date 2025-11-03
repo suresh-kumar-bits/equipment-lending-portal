@@ -1,80 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiGet, apiPost } from '../services/api';
 
 /**
  * BorrowEquipment Page
  * 
+ * UPDATES (Phase 2 Integration):
+ * ✅ Removed mockEquipmentData
+ * ✅ Fetch equipment from: GET /api/equipment
+ * ✅ Submit request to: POST /api/requests/create
+ * ✅ Custom date range selection
+ * ✅ Loading and error states
+ * 
  * This page allows students to borrow equipment with:
- * - Equipment selection
- * - Date range selection
- * - Notes/comments
+ * - Equipment selection from backend
+ * - Date range selection (from and to dates)
+ * - Purpose/notes for request
  * - Confirmation before submission
- * 
- * Props:
- * - user: Current logged-in user object
- * 
- * Future Integration with Backend:
- * - GET /api/equipment (available equipment)
- * - POST /api/requests/create (submit borrow request)
  */
 
 const BorrowEquipment = ({ user }) => {
   const navigate = useNavigate();
 
-  // Mock equipment data
-  const mockEquipmentData = [
-    {
-      id: 1,
-      name: 'Basketball Set',
-      category: 'Sports',
-      description: 'Professional basketball set with 5 balls and pump',
-      condition: 'Good',
-      available: 3,
-    },
-    {
-      id: 2,
-      name: 'Microscope',
-      category: 'Lab',
-      description: 'Advanced optical microscope for laboratory work',
-      condition: 'Excellent',
-      available: 8,
-    },
-    {
-      id: 3,
-      name: 'Digital Camera',
-      category: 'Camera',
-      description: '24MP DSLR camera with lenses',
-      condition: 'Good',
-      available: 2,
-    },
-    {
-      id: 4,
-      name: 'Guitar',
-      category: 'Musical',
-      description: 'Acoustic guitar with case and accessories',
-      condition: 'Good',
-      available: 1,
-    },
-    {
-      id: 5,
-      name: 'Laptop',
-      category: 'Computing',
-      description: 'Intel i7 laptop for project work',
-      condition: 'Excellent',
-      available: 4,
-    },
-    {
-      id: 7,
-      name: 'Projector',
-      category: 'Computing',
-      description: '4K projector for presentations',
-      condition: 'Good',
-      available: 2,
-    },
-  ];
+  // Equipment state
+  const [equipment, setEquipment] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // State management
-  const [equipment, setEquipment] = useState(mockEquipmentData);
+  // Form state
   const [formData, setFormData] = useState({
     equipmentId: '',
     equipmentName: '',
@@ -87,16 +40,55 @@ const BorrowEquipment = ({ user }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
+   * Fetch available equipment on component mount
+   */
+  useEffect(() => {
+    fetchEquipment();
+  }, []);
+
+  /**
+   * Fetch equipment from backend
+   */
+  const fetchEquipment = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Build query parameters - get available equipment only
+      const params = new URLSearchParams();
+      params.append('availability', 'available');
+      params.append('limit', '100');
+
+      // Call: GET /api/equipment
+      const response = await apiGet(`/api/equipment?${params.toString()}`);
+
+      if (response.success) {
+        setEquipment(response.data.equipment);
+        console.log('Available equipment loaded:', response.data.equipment);
+      } else {
+        setError(response.message || 'Failed to load equipment');
+      }
+    } catch (err) {
+      console.error('Error loading equipment:', err);
+      setError(err.message || 'Error loading equipment from server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
    * Handle equipment selection
    */
   const handleEquipmentChange = (e) => {
     const selectedId = e.target.value;
-    const selectedEquipment = equipment.find((item) => item.id === parseInt(selectedId));
+    const selectedEquipmentItem = equipment.find(
+      (item) => item._id === selectedId
+    );
 
     setFormData({
       ...formData,
       equipmentId: selectedId,
-      equipmentName: selectedEquipment ? selectedEquipment.name : '',
+      equipmentName: selectedEquipmentItem ? selectedEquipmentItem.name : '',
     });
 
     setErrors({ ...errors, equipmentId: '' });
@@ -133,12 +125,22 @@ const BorrowEquipment = ({ user }) => {
     }
 
     if (formData.borrowFromDate && formData.borrowToDate) {
-      if (new Date(formData.borrowFromDate) >= new Date(formData.borrowToDate)) {
+      const fromDate = new Date(formData.borrowFromDate);
+      const toDate = new Date(formData.borrowToDate);
+
+      if (fromDate >= toDate) {
         newErrors.borrowToDate = 'Return date must be after borrow date';
+      }
+
+      // Check if borrow date is not in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (fromDate < today) {
+        newErrors.borrowFromDate = 'Borrow date cannot be in the past';
       }
     }
 
-    if (!formData.notes) {
+    if (!formData.notes || formData.notes.trim() === '') {
       newErrors.notes = 'Please enter purpose/notes';
     }
 
@@ -160,36 +162,59 @@ const BorrowEquipment = ({ user }) => {
   };
 
   /**
-   * Confirm and submit borrow request
-   * In Phase 2: Will call POST /api/requests/create
+   * Confirm and submit borrow request to backend
    */
   const handleConfirmSubmit = async () => {
-    setIsSubmitting(true);
-
     try {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setIsSubmitting(true);
 
-      // Mock API call success
-      alert('Borrow request submitted successfully! An admin will review your request soon.');
+      // ============================================================
+      // CREATE BORROW REQUEST - SEND TO BACKEND
+      // ============================================================
 
-      // Reset form
-      setFormData({
-        equipmentId: '',
-        equipmentName: '',
-        borrowFromDate: '',
-        borrowToDate: '',
-        notes: '',
-      });
+      const borrowRequest = {
+        studentId: user._id || user.id,
+        studentName: user.name,
+        studentEmail: user.email,
+        equipmentId: formData.equipmentId,
+        equipmentName: formData.equipmentName,
+        borrowFromDate: formData.borrowFromDate,
+        borrowToDate: formData.borrowToDate,
+        notes: formData.notes,
+      };
 
+      // Call: POST /api/requests/create
+      const response = await apiPost('/api/requests/create', borrowRequest);
+
+      if (response.success) {
+        console.log('Borrow request created:', response.data);
+        alert(
+          `✅ Borrow request submitted successfully!\n\nEquipment: ${formData.equipmentName}\nBorrow Period: ${new Date(formData.borrowFromDate).toLocaleDateString()} to ${new Date(formData.borrowToDate).toLocaleDateString()}\n\nStatus: Pending\nAn administrator will review your request.`
+        );
+
+        // Reset form
+        setFormData({
+          equipmentId: '',
+          equipmentName: '',
+          borrowFromDate: '',
+          borrowToDate: '',
+          notes: '',
+        });
+
+        setShowConfirmation(false);
+
+        // Redirect to borrow history after 2 seconds
+        setTimeout(() => {
+          navigate('/borrow-history');
+        }, 2000);
+      } else {
+        alert('❌ ' + (response.message || 'Failed to submit borrow request'));
+        setShowConfirmation(false);
+      }
+    } catch (err) {
+      console.error('Error submitting borrow request:', err);
+      alert('❌ Error: ' + err.message);
       setShowConfirmation(false);
-
-      // Redirect to borrow history after 1 second
-      setTimeout(() => {
-        navigate('/borrow-history');
-      }, 1000);
-    } catch (error) {
-      alert('Error submitting request. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -204,7 +229,7 @@ const BorrowEquipment = ({ user }) => {
   };
 
   const selectedEquipmentItem = equipment.find(
-    (item) => item.id === parseInt(formData.equipmentId)
+    (item) => item._id === formData.equipmentId
   );
 
   return (
@@ -216,129 +241,158 @@ const BorrowEquipment = ({ user }) => {
             <h1 className="h3 fw-bold text-dark">
               <i className="fa fa-plus-circle me-2 text-primary"></i>Borrow Equipment
             </h1>
-            <p className="text-muted">Submit a request to borrow equipment from our inventory</p>
+            <p className="text-muted">Submit a request to borrow equipment with custom dates</p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+              <i className="fa fa-exclamation-circle me-2"></i>
+              <strong>Error!</strong> {error}
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setError('')}
+              ></button>
+            </div>
+          )}
 
           {/* Form Card */}
           <div className="card border-0 shadow-sm">
             <div className="card-body p-4">
-              <form onSubmit={handleSubmit}>
-                {/* Equipment Selection */}
-                <div className="mb-4">
-                  <label htmlFor="equipment" className="form-label fw-600 text-dark">
-                    <i className="fa fa-box me-2"></i>Select Equipment *
-                  </label>
-                  <select
-                    id="equipment"
-                    className={`form-select form-select-lg ${errors.equipmentId ? 'is-invalid' : ''}`}
-                    value={formData.equipmentId}
-                    onChange={handleEquipmentChange}
-                  >
-                    <option value="">-- Choose Equipment --</option>
-                    {equipment.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} (Available: {item.available})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.equipmentId && (
-                    <div className="invalid-feedback d-block">{errors.equipmentId}</div>
-                  )}
-                </div>
-
-                {/* Equipment Details */}
-                {selectedEquipmentItem && (
-                  <div className="alert alert-info alert-sm mb-4">
-                    <div className="row">
-                      <div className="col-md-6">
-                        <p className="mb-1">
-                          <strong>Category:</strong> {selectedEquipmentItem.category}
-                        </p>
-                      </div>
-                      <div className="col-md-6">
-                        <p className="mb-1">
-                          <strong>Condition:</strong> {selectedEquipmentItem.condition}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="mb-0 small text-muted mt-2">
-                      {selectedEquipmentItem.description}
-                    </p>
+              {loading ? (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
                   </div>
-                )}
+                  <p className="mt-3 text-muted">Loading available equipment...</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit}>
+                  {/* Equipment Selection */}
+                  <div className="mb-4">
+                    <label htmlFor="equipment" className="form-label fw-600 text-dark">
+                      <i className="fa fa-box me-2"></i>Select Equipment *
+                    </label>
+                    <select
+                      id="equipment"
+                      className={`form-select form-select-lg ${
+                        errors.equipmentId ? 'is-invalid' : ''
+                      }`}
+                      value={formData.equipmentId}
+                      onChange={handleEquipmentChange}
+                      disabled={loading}
+                    >
+                      <option value="">-- Choose Equipment --</option>
+                      {equipment.map((item) => (
+                        <option key={item._id} value={item._id}>
+                          {item.name} (Available: {item.available})
+                        </option>
+                      ))}
+                    </select>
+                    {errors.equipmentId && (
+                      <div className="invalid-feedback d-block">{errors.equipmentId}</div>
+                    )}
+                  </div>
 
-                {/* Borrow From Date */}
-                <div className="mb-4">
-                  <label htmlFor="borrowFromDate" className="form-label fw-600 text-dark">
-                    <i className="fa fa-calendar me-2"></i>Borrow From Date *
-                  </label>
-                  <input
-                    type="date"
-                    id="borrowFromDate"
-                    className={`form-control form-control-lg ${errors.borrowFromDate ? 'is-invalid' : ''}`}
-                    name="borrowFromDate"
-                    value={formData.borrowFromDate}
-                    onChange={handleInputChange}
-                    min={getTodayDate()}
-                  />
-                  {errors.borrowFromDate && (
-                    <div className="invalid-feedback d-block">{errors.borrowFromDate}</div>
+                  {/* Equipment Details */}
+                  {selectedEquipmentItem && (
+                    <div className="alert alert-info alert-sm mb-4">
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p className="mb-1">
+                            <strong>Category:</strong> {selectedEquipmentItem.category}
+                          </p>
+                        </div>
+                        <div className="col-md-6">
+                          <p className="mb-1">
+                            <strong>Condition:</strong> {selectedEquipmentItem.condition}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mb-0 small text-muted mt-2">
+                        {selectedEquipmentItem.description}
+                      </p>
+                    </div>
                   )}
-                </div>
 
-                {/* Return To Date */}
-                <div className="mb-4">
-                  <label htmlFor="borrowToDate" className="form-label fw-600 text-dark">
-                    <i className="fa fa-calendar me-2"></i>Return By Date *
-                  </label>
-                  <input
-                    type="date"
-                    id="borrowToDate"
-                    className={`form-control form-control-lg ${errors.borrowToDate ? 'is-invalid' : ''}`}
-                    name="borrowToDate"
-                    value={formData.borrowToDate}
-                    onChange={handleInputChange}
-                    min={formData.borrowFromDate || getTodayDate()}
-                  />
-                  {errors.borrowToDate && (
-                    <div className="invalid-feedback d-block">{errors.borrowToDate}</div>
-                  )}
-                </div>
+                  {/* Borrow From Date */}
+                  <div className="mb-4">
+                    <label htmlFor="borrowFromDate" className="form-label fw-600 text-dark">
+                      <i className="fa fa-calendar me-2"></i>Borrow From Date *
+                    </label>
+                    <input
+                      type="date"
+                      id="borrowFromDate"
+                      className={`form-control form-control-lg ${
+                        errors.borrowFromDate ? 'is-invalid' : ''
+                      }`}
+                      name="borrowFromDate"
+                      value={formData.borrowFromDate}
+                      onChange={handleInputChange}
+                      min={getTodayDate()}
+                    />
+                    {errors.borrowFromDate && (
+                      <div className="invalid-feedback d-block">{errors.borrowFromDate}</div>
+                    )}
+                  </div>
 
-                {/* Purpose/Notes */}
-                <div className="mb-4">
-                  <label htmlFor="notes" className="form-label fw-600 text-dark">
-                    <i className="fa fa-sticky-note me-2"></i>Purpose/Notes *
-                  </label>
-                  <textarea
-                    id="notes"
-                    className={`form-control ${errors.notes ? 'is-invalid' : ''}`}
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleInputChange}
-                    placeholder="Explain why you need this equipment"
-                    rows="4"
-                  ></textarea>
-                  <small className="text-muted d-block mt-1">
-                    This helps admins understand your request
-                  </small>
-                  {errors.notes && (
-                    <div className="invalid-feedback d-block">{errors.notes}</div>
-                  )}
-                </div>
+                  {/* Return To Date */}
+                  <div className="mb-4">
+                    <label htmlFor="borrowToDate" className="form-label fw-600 text-dark">
+                      <i className="fa fa-calendar me-2"></i>Return By Date *
+                    </label>
+                    <input
+                      type="date"
+                      id="borrowToDate"
+                      className={`form-control form-control-lg ${
+                        errors.borrowToDate ? 'is-invalid' : ''
+                      }`}
+                      name="borrowToDate"
+                      value={formData.borrowToDate}
+                      onChange={handleInputChange}
+                      min={formData.borrowFromDate || getTodayDate()}
+                    />
+                    {errors.borrowToDate && (
+                      <div className="invalid-feedback d-block">{errors.borrowToDate}</div>
+                    )}
+                  </div>
 
-                {/* Important Notice */}
-                <div className="alert alert-warning alert-sm mb-4">
-                  <i className="fa fa-info-circle me-2"></i>
-                  <strong>Important:</strong> This is a request. An administrator will review and
-                  approve or reject your request. You will be notified via email.
-                </div>
+                  {/* Purpose/Notes */}
+                  <div className="mb-4">
+                    <label htmlFor="notes" className="form-label fw-600 text-dark">
+                      <i className="fa fa-sticky-note me-2"></i>Purpose/Notes *
+                    </label>
+                    <textarea
+                      id="notes"
+                      className={`form-control ${errors.notes ? 'is-invalid' : ''}`}
+                      name="notes"
+                      value={formData.notes}
+                      onChange={handleInputChange}
+                      placeholder="Explain why you need this equipment"
+                      rows="4"
+                    ></textarea>
+                    <small className="text-muted d-block mt-1">
+                      This helps admins understand your request
+                    </small>
+                    {errors.notes && (
+                      <div className="invalid-feedback d-block">{errors.notes}</div>
+                    )}
+                  </div>
 
-                {/* Submit Button */}
-                <button type="submit" className="btn btn-primary btn-lg w-100 fw-bold">
-                  <i className="fa fa-paper-plane me-2"></i>Submit Request
-                </button>
-              </form>
+                  {/* Important Notice */}
+                  <div className="alert alert-warning alert-sm mb-4">
+                    <i className="fa fa-info-circle me-2"></i>
+                    <strong>Important:</strong> This is a request. An administrator will review
+                    and approve or reject your request. You will be notified of the decision.
+                  </div>
+
+                  {/* Submit Button */}
+                  <button type="submit" className="btn btn-primary btn-lg w-100 fw-bold">
+                    <i className="fa fa-paper-plane me-2"></i>Submit Request
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -346,7 +400,11 @@ const BorrowEquipment = ({ user }) => {
 
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="modal d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-light border-bottom">
@@ -357,6 +415,7 @@ const BorrowEquipment = ({ user }) => {
                   type="button"
                   className="btn-close"
                   onClick={() => setShowConfirmation(false)}
+                  disabled={isSubmitting}
                 ></button>
               </div>
               <div className="modal-body">
@@ -373,7 +432,8 @@ const BorrowEquipment = ({ user }) => {
                   <div className="mb-2">
                     <p className="text-muted small mb-1">Borrow Period:</p>
                     <p className="fw-600 text-dark mb-0">
-                      {formData.borrowFromDate} to {formData.borrowToDate}
+                      {new Date(formData.borrowFromDate).toLocaleDateString()} to{' '}
+                      {new Date(formData.borrowToDate).toLocaleDateString()}
                     </p>
                   </div>
 
@@ -406,7 +466,11 @@ const BorrowEquipment = ({ user }) => {
                 >
                   {isSubmitting ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
                       Submitting...
                     </>
                   ) : (

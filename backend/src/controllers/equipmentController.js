@@ -1,4 +1,4 @@
-const Equipment = require('../models/Equipment');
+const Equipment = require("../models/Equipment");
 
 /**
  * Equipment Controller
@@ -8,7 +8,7 @@ const Equipment = require('../models/Equipment');
 /**
  * Get All Equipment
  * GET /api/equipment
- * 
+ *
  * Retrieves all equipment with optional filtering and pagination
  */
 exports.getAllEquipment = async (req, res) => {
@@ -24,8 +24,8 @@ exports.getAllEquipment = async (req, res) => {
     // Search by name or description
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -35,9 +35,9 @@ exports.getAllEquipment = async (req, res) => {
     }
 
     // Filter by availability
-    if (availability === 'available') {
+    if (availability === "available") {
       filter.available = { $gt: 0 };
-    } else if (availability === 'unavailable') {
+    } else if (availability === "unavailable") {
       filter.available = 0;
     }
 
@@ -68,7 +68,7 @@ exports.getAllEquipment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Equipment retrieved successfully',
+      message: "Equipment retrieved successfully",
       data: {
         equipment,
         pagination: {
@@ -79,12 +79,11 @@ exports.getAllEquipment = async (req, res) => {
         },
       },
     });
-
   } catch (error) {
-    console.error('Get equipment error:', error);
+    console.error("Get equipment error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error retrieving equipment',
+      message: "Server error retrieving equipment",
       error: error.message,
     });
   }
@@ -93,7 +92,7 @@ exports.getAllEquipment = async (req, res) => {
 /**
  * Get Single Equipment
  * GET /api/equipment/:id
- * 
+ *
  * Retrieves details of a single equipment item
  */
 exports.getEquipmentById = async (req, res) => {
@@ -105,23 +104,22 @@ exports.getEquipmentById = async (req, res) => {
     if (!equipment) {
       return res.status(404).json({
         success: false,
-        message: 'Equipment not found',
+        message: "Equipment not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Equipment retrieved successfully',
+      message: "Equipment retrieved successfully",
       data: {
         equipment,
       },
     });
-
   } catch (error) {
-    console.error('Get equipment error:', error);
+    console.error("Get equipment error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error retrieving equipment',
+      message: "Server error retrieving equipment",
       error: error.message,
     });
   }
@@ -130,35 +128,50 @@ exports.getEquipmentById = async (req, res) => {
 /**
  * Add New Equipment
  * POST /api/equipment
- * 
+ *
  * Creates new equipment (Admin only)
  */
 exports.addEquipment = async (req, res) => {
   try {
-    const { name, category, description, condition, quantity, available, location } = req.body;
+    const {
+      name,
+      category,
+      description,
+      condition,
+      quantity,
+      available,
+      location,
+    } = req.body;
 
     // ============================================================
     // 1. VALIDATION
     // ============================================================
 
-    if (!name || !category || !description || !condition || !quantity || !location) {
+    if (
+      !name ||
+      !category ||
+      !description ||
+      !condition ||
+      !quantity ||
+      !location
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields',
+        message: "Please provide all required fields",
       });
     }
 
     if (available === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide available quantity',
+        message: "Please provide available quantity",
       });
     }
 
     if (available > quantity) {
       return res.status(400).json({
         success: false,
-        message: 'Available quantity cannot exceed total quantity',
+        message: "Available quantity cannot exceed total quantity",
       });
     }
 
@@ -182,17 +195,16 @@ exports.addEquipment = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Equipment added successfully',
+      message: "Equipment added successfully",
       data: {
         equipment,
       },
     });
-
   } catch (error) {
-    console.error('Add equipment error:', error);
+    console.error("Add equipment error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error adding equipment',
+      message: "Server error adding equipment",
       error: error.message,
     });
   }
@@ -201,13 +213,21 @@ exports.addEquipment = async (req, res) => {
 /**
  * Update Equipment
  * PUT /api/equipment/:id
- * 
+ *
  * Updates equipment details (Admin only)
  */
 exports.updateEquipment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, category, description, condition, quantity, available, location } = req.body;
+    const {
+      name,
+      category,
+      description,
+      condition,
+      quantity,
+      available,
+      location,
+    } = req.body;
 
     // ============================================================
     // 1. FIND EQUIPMENT
@@ -218,7 +238,7 @@ exports.updateEquipment = async (req, res) => {
     if (!equipment) {
       return res.status(404).json({
         success: false,
-        message: 'Equipment not found',
+        message: "Equipment not found",
       });
     }
 
@@ -226,13 +246,16 @@ exports.updateEquipment = async (req, res) => {
     // 2. VALIDATION
     // ============================================================
 
-    if (available !== undefined && quantity !== undefined) {
-      if (available > quantity) {
-        return res.status(400).json({
-          success: false,
-          message: 'Available quantity cannot exceed total quantity',
-        });
-      }
+    // Check if available exceeds quantity BEFORE updating
+    const newAvailable =
+      available !== undefined ? available : equipment.available;
+    const newQuantity = quantity !== undefined ? quantity : equipment.quantity;
+
+    if (newAvailable > newQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: "Available quantity cannot exceed total quantity",
+      });
     }
 
     // ============================================================
@@ -242,17 +265,17 @@ exports.updateEquipment = async (req, res) => {
     equipment = await Equipment.findByIdAndUpdate(
       id,
       {
-        name,
-        category,
-        description,
-        condition,
-        quantity,
-        available,
-        location,
+        ...(name && { name }),
+        ...(category && { category }),
+        ...(description && { description }),
+        ...(condition && { condition }),
+        ...(quantity !== undefined && { quantity }),
+        ...(available !== undefined && { available }),
+        ...(location && { location }),
       },
       {
-        new: true, // Return updated document
-        runValidators: true, // Run schema validators
+        new: true,
+        runValidators: false, // Disable validators during update
       }
     );
 
@@ -262,17 +285,16 @@ exports.updateEquipment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Equipment updated successfully',
+      message: "Equipment updated successfully",
       data: {
         equipment,
       },
     });
-
   } catch (error) {
-    console.error('Update equipment error:', error);
+    console.error("Update equipment error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error updating equipment',
+      message: "Server error updating equipment",
       error: error.message,
     });
   }
@@ -281,7 +303,7 @@ exports.updateEquipment = async (req, res) => {
 /**
  * Delete Equipment
  * DELETE /api/equipment/:id
- * 
+ *
  * Deletes equipment (Admin only)
  */
 exports.deleteEquipment = async (req, res) => {
@@ -297,7 +319,7 @@ exports.deleteEquipment = async (req, res) => {
     if (!equipment) {
       return res.status(404).json({
         success: false,
-        message: 'Equipment not found',
+        message: "Equipment not found",
       });
     }
 
@@ -307,17 +329,16 @@ exports.deleteEquipment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Equipment deleted successfully',
+      message: "Equipment deleted successfully",
       data: {
         id: equipment._id,
       },
     });
-
   } catch (error) {
-    console.error('Delete equipment error:', error);
+    console.error("Delete equipment error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error deleting equipment',
+      message: "Server error deleting equipment",
       error: error.message,
     });
   }
@@ -326,7 +347,7 @@ exports.deleteEquipment = async (req, res) => {
 /**
  * Get Equipment Statistics
  * GET /api/equipment/stats
- * 
+ *
  * Returns equipment statistics (total, available, borrowed, by category)
  */
 exports.getEquipmentStats = async (req, res) => {
@@ -336,16 +357,16 @@ exports.getEquipmentStats = async (req, res) => {
     // ============================================================
 
     const totalEquipment = await Equipment.countDocuments();
-    
+
     const stats = await Equipment.aggregate([
       {
         $group: {
           _id: null,
-          totalQuantity: { $sum: '$quantity' },
-          totalAvailable: { $sum: '$available' },
+          totalQuantity: { $sum: "$quantity" },
+          totalAvailable: { $sum: "$available" },
           totalBorrowed: {
             $sum: {
-              $subtract: ['$quantity', '$available'],
+              $subtract: ["$quantity", "$available"],
             },
           },
         },
@@ -355,10 +376,10 @@ exports.getEquipmentStats = async (req, res) => {
     const byCategory = await Equipment.aggregate([
       {
         $group: {
-          _id: '$category',
+          _id: "$category",
           count: { $sum: 1 },
-          totalQuantity: { $sum: '$quantity' },
-          available: { $sum: '$available' },
+          totalQuantity: { $sum: "$quantity" },
+          available: { $sum: "$available" },
         },
       },
       {
@@ -372,7 +393,7 @@ exports.getEquipmentStats = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Equipment statistics retrieved',
+      message: "Equipment statistics retrieved",
       data: {
         stats: {
           totalItems: totalEquipment,
@@ -383,12 +404,11 @@ exports.getEquipmentStats = async (req, res) => {
         byCategory,
       },
     });
-
   } catch (error) {
-    console.error('Get stats error:', error);
+    console.error("Get stats error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error retrieving statistics',
+      message: "Server error retrieving statistics",
       error: error.message,
     });
   }

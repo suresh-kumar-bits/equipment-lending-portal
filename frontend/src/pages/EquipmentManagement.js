@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '../services/api';
 
 /**
  * EquipmentManagement Page
+ * 
+ * UPDATES (Phase 2 Integration):
+ * ✅ Removed mockEquipmentData
+ * ✅ Fetch equipment from: GET /api/equipment
+ * ✅ Add equipment: POST /api/equipment
+ * ✅ Update equipment: PUT /api/equipment/:id
+ * ✅ Delete equipment: DELETE /api/equipment/:id
+ * ✅ Loading and error states
+ * ✅ Real-time data updates
  * 
  * This page allows admins to:
  * - View all equipment in a table
@@ -9,58 +19,18 @@ import React, { useState } from 'react';
  * - Edit existing equipment
  * - Delete equipment
  * - Search and filter equipment
- * 
- * Props:
- * - user: Current logged-in user object (admin)
- * 
- * Future Integration with Backend:
- * - Get equipment: GET /api/equipment
- * - Add equipment: POST /api/equipment
- * - Update equipment: PUT /api/equipment/:id
- * - Delete equipment: DELETE /api/equipment/:id
  */
 
 const EquipmentManagement = ({ user }) => {
-  // Mock equipment data
-  const mockEquipmentData = [
-    {
-      id: 1,
-      name: 'Basketball Set',
-      category: 'Sports',
-      description: 'Professional basketball set with 5 balls and pump',
-      condition: 'Good',
-      quantity: 5,
-      available: 3,
-      location: 'Sports Room A',
-    },
-    {
-      id: 2,
-      name: 'Microscope',
-      category: 'Lab',
-      description: 'Advanced optical microscope for laboratory work',
-      condition: 'Excellent',
-      quantity: 10,
-      available: 8,
-      location: 'Lab 1',
-    },
-    {
-      id: 3,
-      name: 'Digital Camera',
-      category: 'Camera',
-      description: '24MP DSLR camera with lenses',
-      condition: 'Good',
-      quantity: 4,
-      available: 2,
-      location: 'Media Room',
-    },
-  ];
-
   // State management
-  const [equipment, setEquipment] = useState(mockEquipmentData);
+  const [equipment, setEquipment] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     category: 'Sports',
@@ -74,15 +44,47 @@ const EquipmentManagement = ({ user }) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   /**
-   * Get unique categories
+   * Fetch equipment from backend on component mount
    */
-  const getCategories = () => {
-    const categories = [...new Set(equipment.map((item) => item.category))];
-    return categories;
+  useEffect(() => {
+    fetchEquipment();
+  }, []);
+
+  /**
+   * Fetch all equipment
+   */
+  const fetchEquipment = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Call: GET /api/equipment
+      const response = await apiGet('/api/equipment?limit=100');
+
+      if (response.success) {
+        setEquipment(response.data.equipment);
+        console.log('Equipment loaded:', response.data.equipment);
+      } else {
+        setError(response.message || 'Failed to load equipment');
+      }
+    } catch (err) {
+      console.error('Error loading equipment:', err);
+      setError(err.message || 'Error loading equipment from server');
+    } finally {
+      setLoading(false);
+    }
   };
 
   /**
-   * Filter equipment
+   * Get unique categories from loaded equipment
+   */
+  const getCategories = () => {
+    const categories = [...new Set(equipment.map((item) => item.category))];
+    return categories.sort();
+  };
+
+  /**
+   * Filter equipment based on search and category
    */
   const getFilteredEquipment = () => {
     let filtered = equipment;
@@ -123,7 +125,7 @@ const EquipmentManagement = ({ user }) => {
    */
   const handleEditEquipment = (item) => {
     setModalMode('edit');
-    setEditingId(item.id);
+    setEditingId(item._id);
     setFormData({
       name: item.name,
       category: item.category,
@@ -148,52 +150,101 @@ const EquipmentManagement = ({ user }) => {
   };
 
   /**
-   * Handle form submission
-   * In Phase 2: Will call POST /api/equipment or PUT /api/equipment/:id
+   * Validate form
    */
-  const handleSubmitForm = (e) => {
+  const validateForm = () => {
+    if (!formData.name || !formData.quantity || formData.available === '') {
+      alert('Please fill in all required fields (Name, Quantity, Available)');
+      return false;
+    }
+
+    if (formData.available > formData.quantity) {
+      alert('Available quantity cannot exceed total quantity');
+      return false;
+    }
+
+    return true;
+  };
+
+  /**
+   * Handle form submission (add or edit)
+   */
+  const handleSubmitForm = async (e) => {
     e.preventDefault();
 
-    // Validation
-    if (!formData.name || !formData.quantity || !formData.available) {
-      alert('Please fill in all required fields');
+    if (!validateForm()) {
       return;
     }
 
-    if (modalMode === 'add') {
-      // Add new equipment
-      const newEquipment = {
-        id: equipment.length + 1,
-        ...formData,
-      };
-      setEquipment([...equipment, newEquipment]);
-      alert('Equipment added successfully!');
-    } else {
-      // Edit existing equipment
-      setEquipment(
-        equipment.map((item) =>
-          item.id === editingId ? { ...item, ...formData } : item
-        )
-      );
-      alert('Equipment updated successfully!');
-    }
+    try {
+      setSubmitting(true);
 
-    setShowModal(false);
+      if (modalMode === 'add') {
+        // ============================================================
+        // ADD NEW EQUIPMENT
+        // ============================================================
+
+        const response = await apiPost('/api/equipment', formData);
+
+        if (response.success) {
+          setEquipment([...equipment, response.data.equipment]);
+          alert('✅ Equipment added successfully!');
+          setShowModal(false);
+        } else {
+          alert('❌ ' + (response.message || 'Failed to add equipment'));
+        }
+      } else {
+        // ============================================================
+        // UPDATE EXISTING EQUIPMENT
+        // ============================================================
+
+        const response = await apiPut(`/api/equipment/${editingId}`, formData);
+
+        if (response.success) {
+          setEquipment(
+            equipment.map((item) =>
+              item._id === editingId ? response.data.equipment : item
+            )
+          );
+          alert('✅ Equipment updated successfully!');
+          setShowModal(false);
+        } else {
+          alert('❌ ' + (response.message || 'Failed to update equipment'));
+        }
+      }
+    } catch (err) {
+      console.error('Error submitting form:', err);
+      alert('❌ Error: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   /**
    * Handle delete equipment
-   * In Phase 2: Will call DELETE /api/equipment/:id
    */
-  const handleDeleteEquipment = (id) => {
-    setEquipment(equipment.filter((item) => item.id !== id));
-    setDeleteConfirmId(null);
-    alert('Equipment deleted successfully!');
+  const handleDeleteEquipment = async (id) => {
+    try {
+      setSubmitting(true);
+
+      // Call: DELETE /api/equipment/:id
+      const response = await apiDelete(`/api/equipment/${id}`);
+
+      if (response.success) {
+        setEquipment(equipment.filter((item) => item._id !== id));
+        setDeleteConfirmId(null);
+        alert('✅ Equipment deleted successfully!');
+      } else {
+        alert('❌ ' + (response.message || 'Failed to delete equipment'));
+      }
+    } catch (err) {
+      console.error('Error deleting equipment:', err);
+      alert('❌ Error: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  /**
-   * API Documentation entry
-   */
   const filteredEquipment = getFilteredEquipment();
 
   return (
@@ -208,13 +259,34 @@ const EquipmentManagement = ({ user }) => {
         </div>
         <div className="col-md-4 text-end">
           <button
-            className="btn btn-primary"
+            className="btn btn-primary me-2"
             onClick={handleAddEquipment}
+            disabled={loading}
           >
             <i className="fa fa-plus-circle me-2"></i>Add New Equipment
           </button>
+          <button
+            className="btn btn-outline-secondary"
+            onClick={fetchEquipment}
+            disabled={loading}
+          >
+            <i className="fa fa-refresh me-1"></i>Refresh
+          </button>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          <i className="fa fa-exclamation-circle me-2"></i>
+          <strong>Error!</strong> {error}
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError('')}
+          ></button>
+        </div>
+      )}
 
       {/* Filter Section */}
       <div className="row mb-4">
@@ -228,6 +300,7 @@ const EquipmentManagement = ({ user }) => {
             placeholder="Search by equipment name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={loading}
           />
         </div>
 
@@ -239,6 +312,7 @@ const EquipmentManagement = ({ user }) => {
             className="form-select"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
+            disabled={loading}
           >
             <option value="all">All Categories</option>
             {getCategories().map((category) => (
@@ -250,18 +324,27 @@ const EquipmentManagement = ({ user }) => {
         </div>
       </div>
 
-      {/* Results Counter */}
+      {/* Results Counter and Loading */}
       <div className="row mb-3">
         <div className="col-12">
-          <p className="text-muted small">
-            Showing <strong>{filteredEquipment.length}</strong> of{' '}
-            <strong>{equipment.length}</strong> items
-          </p>
+          {loading ? (
+            <div className="d-flex align-items-center text-muted">
+              <div className="spinner-border spinner-border-sm me-2" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <span>Loading equipment...</span>
+            </div>
+          ) : (
+            <p className="text-muted small">
+              Showing <strong>{filteredEquipment.length}</strong> of{' '}
+              <strong>{equipment.length}</strong> items
+            </p>
+          )}
         </div>
       </div>
 
       {/* Equipment Table */}
-      {filteredEquipment.length > 0 ? (
+      {!loading && filteredEquipment.length > 0 ? (
         <div className="row mb-4">
           <div className="col-12">
             <div className="table-responsive">
@@ -291,7 +374,7 @@ const EquipmentManagement = ({ user }) => {
                 </thead>
                 <tbody>
                   {filteredEquipment.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item._id}>
                       <td>
                         <strong className="text-dark">{item.name}</strong>
                       </td>
@@ -322,13 +405,15 @@ const EquipmentManagement = ({ user }) => {
                           className="btn btn-sm btn-warning me-2"
                           onClick={() => handleEditEquipment(item)}
                           title="Edit equipment"
+                          disabled={submitting}
                         >
                           <i className="fa fa-edit"></i>
                         </button>
                         <button
                           className="btn btn-sm btn-danger"
-                          onClick={() => setDeleteConfirmId(item.id)}
+                          onClick={() => setDeleteConfirmId(item._id)}
                           title="Delete equipment"
+                          disabled={submitting}
                         >
                           <i className="fa fa-trash"></i>
                         </button>
@@ -340,13 +425,13 @@ const EquipmentManagement = ({ user }) => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : !loading && filteredEquipment.length === 0 ? (
         <div className="text-center py-5">
           <i className="fa fa-inbox fa-3x text-muted mb-3 d-block"></i>
           <h5 className="text-muted">No equipment found</h5>
-          <p className="text-muted small">Try adjusting your search filters</p>
+          <p className="text-muted small">Try adjusting your search filters or add new equipment</p>
         </div>
-      )}
+      ) : null}
 
       {/* Add/Edit Modal */}
       {showModal && (
@@ -362,6 +447,7 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className="btn-close"
                   onClick={() => setShowModal(false)}
+                  disabled={submitting}
                 ></button>
               </div>
               <div className="modal-body">
@@ -376,6 +462,7 @@ const EquipmentManagement = ({ user }) => {
                         value={formData.name}
                         onChange={handleInputChange}
                         placeholder="Enter equipment name"
+                        disabled={submitting}
                       />
                     </div>
 
@@ -386,6 +473,7 @@ const EquipmentManagement = ({ user }) => {
                         name="category"
                         value={formData.category}
                         onChange={handleInputChange}
+                        disabled={submitting}
                       >
                         <option value="Sports">Sports</option>
                         <option value="Lab">Lab</option>
@@ -393,6 +481,7 @@ const EquipmentManagement = ({ user }) => {
                         <option value="Musical">Musical</option>
                         <option value="Computing">Computing</option>
                         <option value="Tools">Tools</option>
+                        <option value="Other">Other</option>
                       </select>
                     </div>
 
@@ -405,6 +494,7 @@ const EquipmentManagement = ({ user }) => {
                         onChange={handleInputChange}
                         placeholder="Enter equipment description"
                         rows="3"
+                        disabled={submitting}
                       ></textarea>
                     </div>
 
@@ -415,6 +505,7 @@ const EquipmentManagement = ({ user }) => {
                         name="condition"
                         value={formData.condition}
                         onChange={handleInputChange}
+                        disabled={submitting}
                       >
                         <option value="Excellent">Excellent</option>
                         <option value="Good">Good</option>
@@ -432,6 +523,7 @@ const EquipmentManagement = ({ user }) => {
                         value={formData.location}
                         onChange={handleInputChange}
                         placeholder="e.g., Sports Room A"
+                        disabled={submitting}
                       />
                     </div>
 
@@ -445,6 +537,7 @@ const EquipmentManagement = ({ user }) => {
                         onChange={handleInputChange}
                         placeholder="Enter total quantity"
                         min="1"
+                        disabled={submitting}
                       />
                     </div>
 
@@ -458,6 +551,7 @@ const EquipmentManagement = ({ user }) => {
                         onChange={handleInputChange}
                         placeholder="Enter available quantity"
                         min="0"
+                        disabled={submitting}
                       />
                     </div>
                   </div>
@@ -468,6 +562,7 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowModal(false)}
+                  disabled={submitting}
                 >
                   Cancel
                 </button>
@@ -475,9 +570,19 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className={`btn ${modalMode === 'add' ? 'btn-success' : 'btn-warning'}`}
                   onClick={handleSubmitForm}
+                  disabled={submitting}
                 >
-                  <i className={`fa ${modalMode === 'add' ? 'fa-plus' : 'fa-save'} me-1`}></i>
-                  {modalMode === 'add' ? 'Add Equipment' : 'Update Equipment'}
+                  {submitting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className={`fa ${modalMode === 'add' ? 'fa-plus' : 'fa-save'} me-1`}></i>
+                      {modalMode === 'add' ? 'Add Equipment' : 'Update Equipment'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -498,6 +603,7 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className="btn-close"
                   onClick={() => setDeleteConfirmId(null)}
+                  disabled={submitting}
                 ></button>
               </div>
               <div className="modal-body">
@@ -514,6 +620,7 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setDeleteConfirmId(null)}
+                  disabled={submitting}
                 >
                   Cancel
                 </button>
@@ -521,8 +628,18 @@ const EquipmentManagement = ({ user }) => {
                   type="button"
                   className="btn btn-danger"
                   onClick={() => handleDeleteEquipment(deleteConfirmId)}
+                  disabled={submitting}
                 >
-                  <i className="fa fa-trash me-1"></i>Delete Equipment
+                  {submitting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa fa-trash me-1"></i>Delete Equipment
+                    </>
+                  )}
                 </button>
               </div>
             </div>

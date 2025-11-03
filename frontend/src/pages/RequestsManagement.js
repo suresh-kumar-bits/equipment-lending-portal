@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiGet, apiPost } from '../services/api';
 
 /**
  * RequestsManagement Page
+ * 
+ * UPDATES (Phase 2 Integration):
+ * ✅ Removed mockRequestsData
+ * ✅ Fetch requests from: GET /api/requests
+ * ✅ Approve requests: POST /api/requests/:id/approve
+ * ✅ Reject requests: POST /api/requests/:id/reject
+ * ✅ Mark as returned: POST /api/requests/:id/return
+ * ✅ Loading and error states
+ * ✅ Real-time data updates
  * 
  * This page allows admins to:
  * - View all borrowing requests
@@ -9,109 +19,55 @@ import React, { useState } from 'react';
  * - Search by student name or equipment name
  * - Approve/Reject requests with notes
  * - Mark equipment as returned
- * 
- * Props:
- * - user: Current logged-in user object (admin)
- * 
- * Future Integration with Backend:
- * - GET /api/requests
- * - POST /api/requests/:id/approve
- * - POST /api/requests/:id/reject
- * - POST /api/requests/:id/return
  */
 
 const RequestsManagement = ({ user }) => {
-  // Mock requests data
-  const mockRequestsData = [
-    {
-      id: 1,
-      studentName: 'John Student',
-      studentId: 'STU001',
-      studentEmail: 'student@example.com',
-      equipmentName: 'Basketball Set',
-      equipmentId: 1,
-      requestedDate: '2025-11-02',
-      borrowFromDate: '2025-11-05',
-      borrowToDate: '2025-11-10',
-      purpose: 'Sports practice and tournament',
-      status: 'pending',
-      approvedBy: null,
-      approvalDate: null,
-      notes: null,
-    },
-    {
-      id: 2,
-      studentName: 'Jane Doe',
-      studentId: 'STU002',
-      studentEmail: 'jane@example.com',
-      equipmentName: 'Microscope',
-      equipmentId: 2,
-      requestedDate: '2025-11-02',
-      borrowFromDate: '2025-11-06',
-      borrowToDate: '2025-11-08',
-      purpose: 'Biology lab experiment',
-      status: 'pending',
-      approvedBy: null,
-      approvalDate: null,
-      notes: null,
-    },
-    {
-      id: 3,
-      studentName: 'Mike Johnson',
-      studentId: 'STU003',
-      studentEmail: 'mike@example.com',
-      equipmentName: 'Digital Camera',
-      equipmentId: 3,
-      requestedDate: '2025-11-01',
-      borrowFromDate: '2025-11-03',
-      borrowToDate: '2025-11-05',
-      purpose: 'Photography project',
-      status: 'approved',
-      approvedBy: 'Admin User',
-      approvalDate: '2025-11-01',
-      notes: 'Approved - return in good condition',
-    },
-    {
-      id: 4,
-      studentName: 'Sarah Smith',
-      studentId: 'STU004',
-      studentEmail: 'sarah@example.com',
-      equipmentName: 'Laptop',
-      equipmentId: 5,
-      requestedDate: '2025-11-01',
-      borrowFromDate: '2025-11-02',
-      borrowToDate: '2025-11-04',
-      purpose: 'Programming assignment',
-      status: 'returned',
-      approvedBy: 'Admin User',
-      approvalDate: '2025-11-01',
-      notes: 'Returned in good condition',
-    },
-    {
-      id: 5,
-      studentName: 'Tom Wilson',
-      studentId: 'STU005',
-      studentEmail: 'tom@example.com',
-      equipmentName: 'Guitar',
-      equipmentId: 4,
-      requestedDate: '2025-10-31',
-      borrowFromDate: '2025-11-01',
-      borrowToDate: '2025-11-03',
-      purpose: 'Musical practice',
-      status: 'rejected',
-      approvedBy: 'Admin User',
-      approvalDate: '2025-10-31',
-      notes: 'Equipment damaged - not available',
-    },
-  ];
-
   // State management
-  const [requests, setRequests] = useState(mockRequestsData);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [actionModal, setActionModal] = useState(null);
   const [actionNotes, setActionNotes] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [viewDetails, setViewDetails] = useState(null);
+
+  /**
+   * Fetch all requests on component mount
+   */
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  /**
+   * Fetch all requests from backend
+   */
+  const fetchRequests = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('limit', '100'); // Get all requests
+
+      // Call: GET /api/requests
+      const response = await apiGet(`/api/requests?${params.toString()}`);
+
+      if (response.success) {
+        setRequests(response.data.requests);
+        console.log('Requests loaded:', response.data.requests);
+      } else {
+        setError(response.message || 'Failed to load requests');
+      }
+    } catch (err) {
+      console.error('Error loading requests:', err);
+      setError(err.message || 'Error loading requests from server');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /**
    * Filter requests based on search and status
@@ -125,7 +81,7 @@ const RequestsManagement = ({ user }) => {
         (req) =>
           req.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           req.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          req.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+          req.studentId?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -153,65 +109,98 @@ const RequestsManagement = ({ user }) => {
   /**
    * Handle approve request
    */
-  const handleApprove = (requestId) => {
-    setRequests(
-      requests.map((req) =>
-        req.id === requestId
-          ? {
-              ...req,
-              status: 'approved',
-              approvedBy: user.name,
-              approvalDate: new Date().toISOString().split('T')[0],
-              notes: actionNotes,
-            }
-          : req
-      )
-    );
-    setActionModal(null);
-    setActionNotes('');
-    alert('Request approved successfully!');
+  const handleApprove = async () => {
+    if (!actionModal?.id) return;
+
+    try {
+      setActionLoading(true);
+
+      // Call: POST /api/requests/:requestId/approve
+      const response = await apiPost(`/api/requests/${actionModal.id}/approve`, {
+        approvalNotes: actionNotes,
+      });
+
+      if (response.success) {
+        console.log('Request approved:', response.data);
+        // Refresh requests list
+        fetchRequests();
+        setActionModal(null);
+        setActionNotes('');
+        alert('✅ Request approved successfully!');
+      } else {
+        alert('❌ ' + (response.message || 'Failed to approve request'));
+      }
+    } catch (err) {
+      console.error('Error approving request:', err);
+      alert('❌ Error approving request: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /**
    * Handle reject request
    */
-  const handleReject = (requestId) => {
-    setRequests(
-      requests.map((req) =>
-        req.id === requestId
-          ? {
-              ...req,
-              status: 'rejected',
-              approvedBy: user.name,
-              approvalDate: new Date().toISOString().split('T')[0],
-              notes: actionNotes,
-            }
-          : req
-      )
-    );
-    setActionModal(null);
-    setActionNotes('');
-    alert('Request rejected successfully!');
+  const handleReject = async () => {
+    if (!actionModal?.id) return;
+
+    try {
+      setActionLoading(true);
+
+      // Call: POST /api/requests/:requestId/reject
+      const response = await apiPost(`/api/requests/${actionModal.id}/reject`, {
+        reason: actionNotes,
+      });
+
+      if (response.success) {
+        console.log('Request rejected:', response.data);
+        // Refresh requests list
+        fetchRequests();
+        setActionModal(null);
+        setActionNotes('');
+        alert('✅ Request rejected successfully!');
+      } else {
+        alert('❌ ' + (response.message || 'Failed to reject request'));
+      }
+    } catch (err) {
+      console.error('Error rejecting request:', err);
+      alert('❌ Error rejecting request: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /**
    * Handle mark as returned
    */
-  const handleMarkReturned = (requestId) => {
-    setRequests(
-      requests.map((req) =>
-        req.id === requestId
-          ? {
-              ...req,
-              status: 'returned',
-              notes: actionNotes || req.notes,
-            }
-          : req
-      )
-    );
-    setActionModal(null);
-    setActionNotes('');
-    alert('Equipment marked as returned!');
+  const handleMarkReturned = async () => {
+    if (!actionModal?.id) return;
+
+    try {
+      setActionLoading(true);
+
+      // Call: POST /api/requests/:requestId/return
+      const response = await apiPost(`/api/requests/${actionModal.id}/return`, {
+        condition: 'Good', // Could be dynamic in future
+        returnNotes: actionNotes,
+      });
+
+      if (response.success) {
+        console.log('Equipment marked as returned:', response.data);
+        // Refresh requests list
+        fetchRequests();
+        setActionModal(null);
+        setActionNotes('');
+        alert('✅ Equipment marked as returned successfully!');
+      } else {
+        alert('❌ ' + (response.message || 'Failed to mark as returned'));
+      }
+    } catch (err) {
+      console.error('Error marking as returned:', err);
+      alert('❌ Error marking as returned: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /**
@@ -227,13 +216,35 @@ const RequestsManagement = ({ user }) => {
     <div className="container-fluid py-4">
       {/* Header Section */}
       <div className="row mb-4">
-        <div className="col-12">
+        <div className="col-md-8">
           <h1 className="h3 fw-bold text-dark">
             <i className="fa fa-list me-2 text-primary"></i>Manage Requests
           </h1>
           <p className="text-muted">Review and manage all borrowing requests</p>
         </div>
+        <div className="col-md-4 text-end">
+          <button
+            className="btn btn-outline-secondary"
+            onClick={fetchRequests}
+            disabled={loading}
+          >
+            <i className="fa fa-refresh me-1"></i>Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          <i className="fa fa-exclamation-circle me-2"></i>
+          <strong>Error!</strong> {error}
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError('')}
+          ></button>
+        </div>
+      )}
 
       {/* Status Summary */}
       <div className="row mb-4 g-3">
@@ -294,6 +305,7 @@ const RequestsManagement = ({ user }) => {
             placeholder="Search by student name, student ID, or equipment..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={loading}
           />
         </div>
 
@@ -305,6 +317,7 @@ const RequestsManagement = ({ user }) => {
             className="form-select"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
+            disabled={loading}
           >
             <option value="all">All Requests</option>
             <option value="pending">Pending</option>
@@ -315,18 +328,27 @@ const RequestsManagement = ({ user }) => {
         </div>
       </div>
 
-      {/* Results Counter */}
+      {/* Results Counter and Loading */}
       <div className="row mb-3">
         <div className="col-12">
-          <p className="text-muted small">
-            Showing <strong>{filteredRequests.length}</strong> of{' '}
-            <strong>{requests.length}</strong> requests
-          </p>
+          {loading ? (
+            <div className="d-flex align-items-center text-muted">
+              <div className="spinner-border spinner-border-sm me-2" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <span>Loading requests...</span>
+            </div>
+          ) : (
+            <p className="text-muted small">
+              Showing <strong>{filteredRequests.length}</strong> of{' '}
+              <strong>{requests.length}</strong> requests
+            </p>
+          )}
         </div>
       </div>
 
       {/* Requests Table */}
-      {filteredRequests.length > 0 ? (
+      {!loading && filteredRequests.length > 0 ? (
         <div className="row mb-4">
           <div className="col-12">
             <div className="table-responsive">
@@ -352,11 +374,11 @@ const RequestsManagement = ({ user }) => {
                   {filteredRequests.map((request) => {
                     const status = getStatusBadge(request.status);
                     return (
-                      <tr key={request.id}>
+                      <tr key={request._id}>
                         <td>
                           <div>
                             <p className="fw-600 text-dark mb-1">{request.studentName}</p>
-                            <small className="text-muted">{request.studentId}</small>
+                            <small className="text-muted">{request.studentEmail}</small>
                           </div>
                         </td>
                         <td>
@@ -366,7 +388,8 @@ const RequestsManagement = ({ user }) => {
                         </td>
                         <td className="text-muted">
                           <small>
-                            {request.borrowFromDate} to {request.borrowToDate}
+                            {new Date(request.borrowFromDate).toLocaleDateString()} to{' '}
+                            {new Date(request.borrowToDate).toLocaleDateString()}
                           </small>
                         </td>
                         <td>
@@ -380,6 +403,7 @@ const RequestsManagement = ({ user }) => {
                             className="btn btn-sm btn-outline-primary me-2"
                             onClick={() => setViewDetails(request)}
                             title="View details"
+                            disabled={actionLoading}
                           >
                             <i className="fa fa-eye"></i>
                           </button>
@@ -389,18 +413,20 @@ const RequestsManagement = ({ user }) => {
                               <button
                                 className="btn btn-sm btn-success me-2"
                                 onClick={() =>
-                                  setActionModal({ id: request.id, action: 'approve' })
+                                  setActionModal({ id: request._id, action: 'approve' })
                                 }
                                 title="Approve"
+                                disabled={actionLoading}
                               >
                                 <i className="fa fa-check"></i>
                               </button>
                               <button
                                 className="btn btn-sm btn-danger"
                                 onClick={() =>
-                                  setActionModal({ id: request.id, action: 'reject' })
+                                  setActionModal({ id: request._id, action: 'reject' })
                                 }
                                 title="Reject"
+                                disabled={actionLoading}
                               >
                                 <i className="fa fa-times"></i>
                               </button>
@@ -411,9 +437,10 @@ const RequestsManagement = ({ user }) => {
                             <button
                               className="btn btn-sm btn-info"
                               onClick={() =>
-                                setActionModal({ id: request.id, action: 'return' })
+                                setActionModal({ id: request._id, action: 'return' })
                               }
                               title="Mark as returned"
+                              disabled={actionLoading}
                             >
                               <i className="fa fa-arrow-left me-1"></i>Returned
                             </button>
@@ -427,13 +454,13 @@ const RequestsManagement = ({ user }) => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : !loading && filteredRequests.length === 0 ? (
         <div className="text-center py-5">
           <i className="fa fa-inbox fa-3x text-muted mb-3 d-block"></i>
           <h5 className="text-muted">No requests found</h5>
           <p className="text-muted small">Try adjusting your search or filters</p>
         </div>
-      )}
+      ) : null}
 
       {/* Details Modal */}
       {viewDetails && (
@@ -456,8 +483,7 @@ const RequestsManagement = ({ user }) => {
                   <p className="mb-1">
                     <strong>{viewDetails.studentName}</strong>
                   </p>
-                  <p className="mb-1 small text-muted">ID: {viewDetails.studentId}</p>
-                  <p className="small text-muted">{viewDetails.studentEmail}</p>
+                  <p className="mb-1 small text-muted">Email: {viewDetails.studentEmail}</p>
                 </div>
 
                 <hr />
@@ -473,35 +499,32 @@ const RequestsManagement = ({ user }) => {
                   <h6 className="fw-600 text-dark mb-2">Dates</h6>
                   <div className="d-flex justify-content-between mb-1">
                     <span className="text-muted">Requested:</span>
-                    <strong>{viewDetails.requestedDate}</strong>
+                    <strong>{new Date(viewDetails.requestedDate).toLocaleDateString()}</strong>
                   </div>
                   <div className="d-flex justify-content-between mb-1">
                     <span className="text-muted">From:</span>
-                    <strong>{viewDetails.borrowFromDate}</strong>
+                    <strong>{new Date(viewDetails.borrowFromDate).toLocaleDateString()}</strong>
                   </div>
                   <div className="d-flex justify-content-between">
                     <span className="text-muted">To:</span>
-                    <strong>{viewDetails.borrowToDate}</strong>
+                    <strong>{new Date(viewDetails.borrowToDate).toLocaleDateString()}</strong>
                   </div>
                 </div>
 
                 <hr />
 
-                <div className="mb-3">
-                  <h6 className="fw-600 text-dark mb-2">Purpose</h6>
-                  <p className="text-muted mb-0">{viewDetails.purpose}</p>
-                </div>
-
-                <hr />
+                {viewDetails.notes && (
+                  <div className="mb-3">
+                    <h6 className="fw-600 text-dark mb-2">Notes</h6>
+                    <p className="text-muted mb-0">{viewDetails.notes}</p>
+                  </div>
+                )}
 
                 <div className="mb-0">
                   <h6 className="fw-600 text-dark mb-2">Status</h6>
                   <span className={`badge ${getStatusBadge(viewDetails.status).bg}`}>
                     {getStatusBadge(viewDetails.status).text}
                   </span>
-                  {viewDetails.notes && (
-                    <p className="small text-muted mt-2 mb-0">Notes: {viewDetails.notes}</p>
-                  )}
                 </div>
               </div>
               <div className="modal-footer border-top">
@@ -543,6 +566,7 @@ const RequestsManagement = ({ user }) => {
                   type="button"
                   className="btn-close"
                   onClick={() => setActionModal(null)}
+                  disabled={actionLoading}
                 ></button>
               </div>
               <div className="modal-body">
@@ -565,6 +589,7 @@ const RequestsManagement = ({ user }) => {
                       : 'Add return notes (condition, etc.)...'
                   }
                   rows="4"
+                  disabled={actionLoading}
                 ></textarea>
               </div>
               <div className="modal-footer border-top">
@@ -572,6 +597,7 @@ const RequestsManagement = ({ user }) => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setActionModal(null)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
@@ -586,17 +612,27 @@ const RequestsManagement = ({ user }) => {
                   }`}
                   onClick={() =>
                     actionModal.action === 'approve'
-                      ? handleApprove(actionModal.id)
+                      ? handleApprove()
                       : actionModal.action === 'reject'
-                      ? handleReject(actionModal.id)
-                      : handleMarkReturned(actionModal.id)
+                      ? handleReject()
+                      : handleMarkReturned()
                   }
+                  disabled={actionLoading}
                 >
-                  {actionModal.action === 'approve'
-                    ? 'Approve'
-                    : actionModal.action === 'reject'
-                    ? 'Reject'
-                    : 'Mark Returned'}
+                  {actionLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {actionModal.action === 'approve'
+                        ? 'Approve'
+                        : actionModal.action === 'reject'
+                        ? 'Reject'
+                        : 'Mark Returned'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>

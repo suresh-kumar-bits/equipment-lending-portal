@@ -1,161 +1,102 @@
 import React, { useState, useEffect } from 'react';
 import EquipmentCard from '../components/EquipmentCard';
+import { apiGet, apiPost } from '../services/api';
 
 /**
  * StudentDashboard Page
  * 
- * This page displays:
- * - All available equipment in a grid/list format
- * - Search and filter functionality
- * - Ability to borrow equipment
- * - View borrow history
- * 
- * Props:
- * - user: Current logged-in user object
- * 
- * Future Integration with Backend:
- * - Equipment list from: GET /api/equipment
- * - Borrow request: POST /api/requests/create
- * - Search: GET /api/equipment?search=query&category=category
+ * UPDATES (Phase 2 Integration - v2):
+ * ✅ Equipment fetched from real backend
+ * ✅ Borrow requests NOW sent to backend
+ * ✅ POST /api/requests/create integration added
+ * ✅ Proper error handling for requests
  */
 
 const StudentDashboard = ({ user }) => {
-  // Mock equipment data - Phase 1
-  const mockEquipmentData = [
-    {
-      id: 1,
-      name: 'Basketball Set',
-      category: 'Sports',
-      description: 'Professional basketball set with 5 balls and pump',
-      condition: 'Good',
-      quantity: 5,
-      available: 3,
-      image: null,
-    },
-    {
-      id: 2,
-      name: 'Microscope',
-      category: 'Lab',
-      description: 'Advanced optical microscope for laboratory work',
-      condition: 'Excellent',
-      quantity: 10,
-      available: 8,
-      image: null,
-    },
-    {
-      id: 3,
-      name: 'Digital Camera',
-      category: 'Camera',
-      description: '24MP DSLR camera with lenses',
-      condition: 'Good',
-      quantity: 4,
-      available: 2,
-      image: null,
-    },
-    {
-      id: 4,
-      name: 'Guitar',
-      category: 'Musical',
-      description: 'Acoustic guitar with case and accessories',
-      condition: 'Good',
-      quantity: 3,
-      available: 1,
-      image: null,
-    },
-    {
-      id: 5,
-      name: 'Laptop',
-      category: 'Computing',
-      description: 'Intel i7 laptop for project work',
-      condition: 'Excellent',
-      quantity: 6,
-      available: 4,
-      image: null,
-    },
-    {
-      id: 6,
-      name: 'Toolkit',
-      category: 'Tools',
-      description: 'Complete toolkit with 50+ tools',
-      condition: 'Good',
-      quantity: 2,
-      available: 0,
-      image: null,
-    },
-    {
-      id: 7,
-      name: 'Projector',
-      category: 'Computing',
-      description: '4K projector for presentations',
-      condition: 'Good',
-      quantity: 3,
-      available: 2,
-      image: null,
-    },
-    {
-      id: 8,
-      name: 'Volleyball Set',
-      category: 'Sports',
-      description: 'Professional volleyball set with net',
-      condition: 'Fair',
-      quantity: 4,
-      available: 2,
-      image: null,
-    },
-  ];
+  // Equipment data and state
+  const [equipment, setEquipment] = useState([]);
+  const [filteredEquipment, setFilteredEquipment] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // State management
-  const [equipment, setEquipment] = useState(mockEquipmentData);
-  const [filteredEquipment, setFilteredEquipment] = useState(mockEquipmentData);
+  // Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedAvailability, setSelectedAvailability] = useState('all');
-  const [viewType, setViewType] = useState('grid'); // 'grid' or 'list'
-  const [borrowRequests, setBorrowRequests] = useState([]);
+  const [viewType, setViewType] = useState('grid');
+
+  // Borrow request state
   const [showBorrowModal, setShowBorrowModal] = useState(false);
   const [selectedEquipmentForBorrow, setSelectedEquipmentForBorrow] = useState(null);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize] = useState(10);
+
+  /**
+   * Fetch equipment from backend on component mount and when filters change
+   */
+  useEffect(() => {
+    fetchEquipment();
+  }, [searchTerm, selectedCategory, selectedAvailability, currentPage]);
+
+  /**
+   * Fetch equipment from backend API
+   */
+  const fetchEquipment = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Build query parameters
+      const params = new URLSearchParams();
+
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      if (selectedCategory !== 'all') {
+        params.append('category', selectedCategory);
+      }
+
+      if (selectedAvailability !== 'all') {
+        params.append('availability', selectedAvailability);
+      }
+
+      params.append('page', currentPage);
+      params.append('limit', pageSize);
+
+      // Call: GET /api/equipment
+      const response = await apiGet(`/api/equipment?${params.toString()}`);
+
+      if (response.success) {
+        setEquipment(response.data.equipment);
+        setFilteredEquipment(response.data.equipment);
+        setTotalPages(response.data.pagination.pages);
+        console.log('Equipment loaded:', response.data.equipment);
+      } else {
+        setError(response.message || 'Failed to load equipment');
+      }
+    } catch (err) {
+      console.error('Error loading equipment:', err);
+      setError(err.message || 'Error loading equipment from server');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /**
    * Get unique categories from equipment
    */
   const getCategories = () => {
     const categories = [...new Set(equipment.map((item) => item.category))];
-    return categories;
+    return categories.sort();
   };
 
   /**
-   * Filter equipment based on search, category, and availability
-   */
-  useEffect(() => {
-    let filtered = equipment;
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.description.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((item) => item.category === selectedCategory);
-    }
-
-    // Filter by availability
-    if (selectedAvailability === 'available') {
-      filtered = filtered.filter((item) => item.available > 0);
-    } else if (selectedAvailability === 'unavailable') {
-      filtered = filtered.filter((item) => item.available === 0);
-    }
-
-    setFilteredEquipment(filtered);
-  }, [searchTerm, selectedCategory, selectedAvailability, equipment]);
-
-  /**
    * Handle equipment borrow button click
-   * Opens modal to confirm borrow request
    */
   const handleBorrowClick = (equipmentItem) => {
     setSelectedEquipmentForBorrow(equipmentItem);
@@ -163,42 +104,74 @@ const StudentDashboard = ({ user }) => {
   };
 
   /**
-   * Submit borrow request
-   * In Phase 2: Will call POST /api/requests/create
+   * Submit borrow request to backend
+   * NOW SENDS TO BACKEND: POST /api/requests/create
    */
-  const handleSubmitBorrow = () => {
+  const handleSubmitBorrow = async () => {
     if (!selectedEquipmentForBorrow) return;
 
-    // Create borrow request object
-    const newRequest = {
-      id: borrowRequests.length + 1,
-      studentId: user.id,
-      studentName: user.name,
-      equipmentId: selectedEquipmentForBorrow.id,
-      equipmentName: selectedEquipmentForBorrow.name,
-      borrowDate: new Date().toLocaleDateString(),
-      requestDate: new Date().toLocaleDateString(),
-      status: 'pending',
-    };
+    try {
+      setBorrowLoading(true);
 
-    // Add to borrow requests
-    setBorrowRequests([...borrowRequests, newRequest]);
+      // ============================================================
+      // CREATE BORROW REQUEST - SEND TO BACKEND
+      // ============================================================
 
-    // Close modal
-    setShowBorrowModal(false);
-    setSelectedEquipmentForBorrow(null);
+      const borrowRequest = {
+        studentId: user._id || user.id,
+        studentName: user.name,
+        studentEmail: user.email,
+        equipmentId: selectedEquipmentForBorrow._id,
+        equipmentName: selectedEquipmentForBorrow.name,
+        borrowFromDate: new Date().toISOString(), // Today
+        borrowToDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        notes: `Requested by ${user.role}`,
+      };
 
-    // Show success message
-    alert(`Borrow request submitted for ${selectedEquipmentForBorrow.name}`);
+      // Call: POST /api/requests/create
+      const response = await apiPost('/api/requests/create', borrowRequest);
+
+      if (response.success) {
+        console.log('Borrow request created:', response.data);
+        alert(
+          `✅ Borrow request submitted successfully!\n\nEquipment: ${selectedEquipmentForBorrow.name}\nStatus: Pending\n\nAn administrator will review your request.`
+        );
+
+        // Close modal
+        setShowBorrowModal(false);
+        setSelectedEquipmentForBorrow(null);
+
+        // Refresh equipment list to update availability
+        fetchEquipment();
+      } else {
+        alert('❌ ' + (response.message || 'Failed to submit borrow request'));
+      }
+    } catch (err) {
+      console.error('Error submitting borrow request:', err);
+      alert('❌ Error: ' + err.message);
+    } finally {
+      setBorrowLoading(false);
+    }
   };
 
   /**
-   * Clear all filters
+   * Clear all filters and reset to first page
    */
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedCategory('all');
     setSelectedAvailability('all');
+    setCurrentPage(1);
+  };
+
+  /**
+   * Handle page change
+   */
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      window.scrollTo(0, 0);
+    }
   };
 
   return (
@@ -233,6 +206,20 @@ const StudentDashboard = ({ user }) => {
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          <i className="fa fa-exclamation-circle me-2"></i>
+          <strong>Error!</strong> {error}
+          <button
+            type="button"
+            className="btn-close"
+            data-bs-dismiss="alert"
+            onClick={() => setError('')}
+          ></button>
+        </div>
+      )}
+
       {/* Filter Section */}
       <div className="row mb-4">
         <div className="col-md-4 mb-3">
@@ -244,7 +231,11 @@ const StudentDashboard = ({ user }) => {
             className="form-control"
             placeholder="Search by name or description..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            disabled={loading}
           />
         </div>
 
@@ -255,7 +246,11 @@ const StudentDashboard = ({ user }) => {
           <select
             className="form-select"
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            onChange={(e) => {
+              setSelectedCategory(e.target.value);
+              setCurrentPage(1);
+            }}
+            disabled={loading}
           >
             <option value="all">All Categories</option>
             {getCategories().map((category) => (
@@ -273,7 +268,11 @@ const StudentDashboard = ({ user }) => {
           <select
             className="form-select"
             value={selectedAvailability}
-            onChange={(e) => setSelectedAvailability(e.target.value)}
+            onChange={(e) => {
+              setSelectedAvailability(e.target.value);
+              setCurrentPage(1);
+            }}
+            disabled={loading}
           >
             <option value="all">All Items</option>
             <option value="available">Available Only</option>
@@ -285,45 +284,102 @@ const StudentDashboard = ({ user }) => {
           <button
             className="btn btn-outline-secondary w-100"
             onClick={handleClearFilters}
+            disabled={loading}
           >
             <i className="fa fa-times me-1"></i>Clear
           </button>
         </div>
       </div>
 
-      {/* Results Counter */}
+      {/* Results Counter and Loading */}
       <div className="row mb-3">
         <div className="col-12">
-          <p className="text-muted small">
-            Showing <strong>{filteredEquipment.length}</strong> of{' '}
-            <strong>{equipment.length}</strong> items
-          </p>
+          {loading ? (
+            <div className="d-flex align-items-center text-muted">
+              <div className="spinner-border spinner-border-sm me-2" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <span>Loading equipment...</span>
+            </div>
+          ) : (
+            <p className="text-muted small">
+              Showing <strong>{filteredEquipment.length}</strong> items (Page{' '}
+              <strong>{currentPage}</strong> of <strong>{totalPages}</strong>)
+            </p>
+          )}
         </div>
       </div>
 
       {/* Equipment Grid/List */}
-      {filteredEquipment.length > 0 ? (
-        <div
-          className={
-            viewType === 'grid'
-              ? 'row g-4'
-              : 'row'
-          }
-        >
-          {filteredEquipment.map((item) => (
-            <div
-              key={item.id}
-              className={viewType === 'grid' ? 'col-md-6 col-lg-4' : 'col-12'}
-            >
-              <EquipmentCard
-                equipment={item}
-                onBorrow={handleBorrowClick}
-                userRole={user.role}
-              />
+      {!loading && filteredEquipment.length > 0 ? (
+        <>
+          <div
+            className={
+              viewType === 'grid'
+                ? 'row g-4'
+                : 'row'
+            }
+          >
+            {filteredEquipment.map((item) => (
+              <div
+                key={item._id}
+                className={viewType === 'grid' ? 'col-md-6 col-lg-4' : 'col-12'}
+              >
+                <EquipmentCard
+                  equipment={item}
+                  onBorrow={handleBorrowClick}
+                  userRole={user.role}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="row mt-4">
+              <div className="col-12 d-flex justify-content-center">
+                <nav aria-label="Page navigation">
+                  <ul className="pagination">
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                    </li>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <li
+                        key={page}
+                        className={`page-item ${currentPage === page ? 'active' : ''}`}
+                      >
+                        <button
+                          className="page-link"
+                          onClick={() => handlePageChange(page)}
+                        >
+                          {page}
+                        </button>
+                      </li>
+                    ))}
+
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
             </div>
-          ))}
-        </div>
-      ) : (
+          )}
+        </>
+      ) : !loading && filteredEquipment.length === 0 ? (
         <div className="text-center py-5">
           <i className="fa fa-inbox fa-3x text-muted mb-3 d-block"></i>
           <h5 className="text-muted">No equipment found</h5>
@@ -337,7 +393,7 @@ const StudentDashboard = ({ user }) => {
             <i className="fa fa-refresh me-1"></i>Clear Filters
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* Borrow Modal */}
       {showBorrowModal && selectedEquipmentForBorrow && (
@@ -352,6 +408,7 @@ const StudentDashboard = ({ user }) => {
                   type="button"
                   className="btn-close"
                   onClick={() => setShowBorrowModal(false)}
+                  disabled={borrowLoading}
                 ></button>
               </div>
               <div className="modal-body">
@@ -368,6 +425,10 @@ const StudentDashboard = ({ user }) => {
                     <span className="text-muted">Available:</span>
                     <strong className="text-success">{selectedEquipmentForBorrow.available}</strong>
                   </div>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Total Quantity:</span>
+                    <strong className="text-dark">{selectedEquipmentForBorrow.quantity}</strong>
+                  </div>
                   <div className="d-flex justify-content-between">
                     <span className="text-muted">Condition:</span>
                     <strong className="text-dark">{selectedEquipmentForBorrow.condition}</strong>
@@ -379,6 +440,7 @@ const StudentDashboard = ({ user }) => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowBorrowModal(false)}
+                  disabled={borrowLoading}
                 >
                   Cancel
                 </button>
@@ -386,8 +448,21 @@ const StudentDashboard = ({ user }) => {
                   type="button"
                   className="btn btn-success"
                   onClick={handleSubmitBorrow}
+                  disabled={borrowLoading}
                 >
-                  <i className="fa fa-check me-1"></i>Confirm Request
+                  {borrowLoading ? (
+                    <>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                      ></span>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa fa-check me-1"></i>Confirm Request
+                    </>
+                  )}
                 </button>
               </div>
             </div>
