@@ -16,7 +16,7 @@
 // CONFIGURATION - CHANGE BACKEND URL HERE ONLY
 // ============================================================
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // Token key for localStorage
 const TOKEN_KEY = 'equipmentPortal_token';
