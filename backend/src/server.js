@@ -126,8 +126,8 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`🧪 Test endpoint: http://localhost:${PORT}/api/test`);
   console.log(`💚 Health check: http://localhost:${PORT}/health`);
   console.log(`📖 API docs: Check API_DOCUMENTATION.md`);
