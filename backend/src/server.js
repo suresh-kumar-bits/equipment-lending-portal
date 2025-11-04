@@ -47,9 +47,6 @@ const corsOptions = {
 // Apply CORS middleware BEFORE other middleware
 app.use(cors(corsOptions));
 
-// Add preflight handling for all routes
-app.options('*', cors(corsOptions));
-
 // ============================================================
 // MONGODB CONNECTION
 // ============================================================
