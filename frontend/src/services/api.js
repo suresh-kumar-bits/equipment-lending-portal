@@ -251,13 +251,26 @@ export const authLogin = async (email, password, role) => {
       role,
     });
 
+    console.log('📥 Raw backend response:', response);
+
+    // Backend returns { success, message, data: { token, user } }
+    // Extract the actual data
+    const loginData = response.data || response;
+
+    console.log('📤 Extracted login data:', loginData);
+    console.log('📤 Token:', loginData.token);
+    console.log('📤 User:', loginData.user);
+
     // Store token and user if login successful
-    if (response.token) {
-      setToken(response.token);
-      setUser(response.user);
+    if (loginData.token && loginData.user) {
+      setToken(loginData.token);
+      setUser(loginData.user);
+      console.log('✅ Token and user stored in localStorage');
+    } else {
+      console.warn('⚠️ Missing token or user in response');
     }
 
-    return response;
+    return loginData;
   } catch (error) {
     console.error('❌ Login error:', error);
     throw error;
@@ -282,13 +295,17 @@ export const authRegister = async (name, email, password, role) => {
       role,
     });
 
+    // Backend returns { success, message, data: { token, user } }
+    // Extract the actual data
+    const registerData = response.data || response;
+
     // Store token and user if registration successful
-    if (response.token) {
-      setToken(response.token);
-      setUser(response.user);
+    if (registerData.token) {
+      setToken(registerData.token);
+      setUser(registerData.user);
     }
 
-    return response;
+    return registerData;
   } catch (error) {
     console.error('❌ Register error:', error);
     throw error;
