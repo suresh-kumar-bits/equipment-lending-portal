@@ -2,21 +2,18 @@
  * API Service
  * Centralized API utility for all backend communication
  * 
- * This file handles:
- * - Backend URL configuration (single source of truth)
- * - Token management (localStorage)
- * - Request interceptor (adds token to headers)
- * - Error handling
- * - All HTTP methods (GET, POST, PUT, DELETE)
- * 
- * File location: frontend/src/services/api.js
+ * CRITICAL: Uses environment variable for backend URL
+ * This allows different URLs for development/production
  */
 
 // ============================================================
-// CONFIGURATION - CHANGE BACKEND URL HERE ONLY
+// CONFIGURATION - USE ENVIRONMENT VARIABLE
 // ============================================================
 
+// READ FROM ENVIRONMENT VARIABLE (set in .env or Vercel)
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+console.log('🔧 API Base URL:', API_BASE_URL); // Debug log
 
 // Token key for localStorage
 const TOKEN_KEY = 'equipmentPortal_token';
@@ -131,7 +128,7 @@ const handleError = async (response) => {
 };
 
 // ============================================================
-// HTTP METHODS
+// HTTP METHODS - GENERIC
 // ============================================================
 
 /**
@@ -141,6 +138,7 @@ const handleError = async (response) => {
  */
 export const apiGet = async (endpoint) => {
   try {
+    console.log(`📡 GET ${API_BASE_URL}${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
       headers: getHeaders(),
@@ -152,7 +150,7 @@ export const apiGet = async (endpoint) => {
 
     return await response.json();
   } catch (error) {
-    console.error(`GET ${endpoint} error:`, error.message);
+    console.error(`❌ GET ${endpoint} error:`, error.message);
     throw error;
   }
 };
@@ -165,6 +163,7 @@ export const apiGet = async (endpoint) => {
  */
 export const apiPost = async (endpoint, data = {}) => {
   try {
+    console.log(`📡 POST ${API_BASE_URL}${endpoint}`, data);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: getHeaders(),
@@ -177,7 +176,7 @@ export const apiPost = async (endpoint, data = {}) => {
 
     return await response.json();
   } catch (error) {
-    console.error(`POST ${endpoint} error:`, error.message);
+    console.error(`❌ POST ${endpoint} error:`, error.message);
     throw error;
   }
 };
@@ -190,6 +189,7 @@ export const apiPost = async (endpoint, data = {}) => {
  */
 export const apiPut = async (endpoint, data = {}) => {
   try {
+    console.log(`📡 PUT ${API_BASE_URL}${endpoint}`, data);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
       headers: getHeaders(),
@@ -202,7 +202,7 @@ export const apiPut = async (endpoint, data = {}) => {
 
     return await response.json();
   } catch (error) {
-    console.error(`PUT ${endpoint} error:`, error.message);
+    console.error(`❌ PUT ${endpoint} error:`, error.message);
     throw error;
   }
 };
@@ -214,6 +214,7 @@ export const apiPut = async (endpoint, data = {}) => {
  */
 export const apiDelete = async (endpoint) => {
   try {
+    console.log(`📡 DELETE ${API_BASE_URL}${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
       headers: getHeaders(),
@@ -225,7 +226,7 @@ export const apiDelete = async (endpoint) => {
 
     return await response.json();
   } catch (error) {
-    console.error(`DELETE ${endpoint} error:`, error.message);
+    console.error(`❌ DELETE ${endpoint} error:`, error.message);
     throw error;
   }
 };
@@ -243,19 +244,24 @@ export const apiDelete = async (endpoint) => {
  * @returns {Promise<object>} - {token, user}
  */
 export const authLogin = async (email, password, role) => {
-  const response = await apiPost('/api/auth/login', {
-    email,
-    password,
-    role,
-  });
+  try {
+    const response = await apiPost('/api/auth/login', {
+      email,
+      password,
+      role,
+    });
 
-  // Store token and user if login successful
-  if (response.data && response.data.token) {
-    setToken(response.data.token);
-    setUser(response.data.user);
+    // Store token and user if login successful
+    if (response.token) {
+      setToken(response.token);
+      setUser(response.user);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    throw error;
   }
-
-  return response.data;
 };
 
 /**
@@ -268,20 +274,25 @@ export const authLogin = async (email, password, role) => {
  * @returns {Promise<object>} - {token, user}
  */
 export const authRegister = async (name, email, password, role) => {
-  const response = await apiPost('/api/auth/register', {
-    name,
-    email,
-    password,
-    role,
-  });
+  try {
+    const response = await apiPost('/api/auth/register', {
+      name,
+      email,
+      password,
+      role,
+    });
 
-  // Store token and user if registration successful
-  if (response.data && response.data.token) {
-    setToken(response.data.token);
-    setUser(response.data.user);
+    // Store token and user if registration successful
+    if (response.token) {
+      setToken(response.token);
+      setUser(response.user);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('❌ Register error:', error);
+    throw error;
   }
-
-  return response.data;
 };
 
 /**
@@ -290,8 +301,13 @@ export const authRegister = async (name, email, password, role) => {
  * @returns {Promise<object>} - User data
  */
 export const authGetMe = async () => {
-  const response = await apiGet('/api/auth/me');
-  return response.data;
+  try {
+    const response = await apiGet('/api/auth/me');
+    return response;
+  } catch (error) {
+    console.error('❌ Get user error:', error);
+    throw error;
+  }
 };
 
 /**
