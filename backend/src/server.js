@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
-// CORS CONFIGURATION - IMPROVED
+// CORS CONFIGURATION - FIXED
 // ============================================================
 
 const allowedOrigins = [
@@ -28,10 +28,13 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
+    console.log('🔍 Request origin:', origin); // Debug log
+    
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.error('❌ CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -41,7 +44,11 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
+// Apply CORS middleware BEFORE other middleware
 app.use(cors(corsOptions));
+
+// Add preflight handling for all routes
+app.options('*', cors(corsOptions));
 
 // ============================================================
 // MONGODB CONNECTION
@@ -56,7 +63,7 @@ if (!mongoUri) {
   process.exit(1);
 }
 
-console.log('📡 Connecting to MongoDB...');
+console.log('🔌 Connecting to MongoDB...');
 
 mongoose.connect(mongoUri)
   .then(() => {
@@ -126,5 +133,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`🧪 Test endpoint: http://localhost:${PORT}/api/test`);
   console.log(`💚 Health check: http://localhost:${PORT}/health`);
-  console.log(`📝 API docs: Check API_DOCUMENTATION.md`);
+  console.log(`📖 API docs: Check API_DOCUMENTATION.md`);
+  console.log(`✅ CORS enabled for: ${allowedOrigins.join(', ')}`);
 });
